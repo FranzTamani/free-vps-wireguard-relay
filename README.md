@@ -137,7 +137,7 @@ Once deployment completes (~1–2 minutes), Terraform automatically prints the e
 
 You can also redisplay this complete summary at any time by running:
 ```bash
-terraform output -raw summary
+terraform output
 ```
 
 ---
