@@ -79,3 +79,35 @@ output "home_wireguard_config" {
   EOT
 }
 
+output "summary" {
+  description = "Consolidated post-deployment summary and instructions."
+  value       = <<-EOT
+    =============================================================================
+      DEPLOYMENT COMPLETE - ALWAYS FREE WIREGUARD GAME RELAY
+    =============================================================================
+
+    1. CONNECTION & SERVER DETAILS:
+       - Reserved Public IP:    ${local.public_ip}
+       - SSH Command:           ssh ${local.instance.admin_user}@${local.public_ip}
+       - OS Image:              ${data.oci_core_images.ubuntu.images[0].display_name}
+
+    2. DNS CONFIGURATION (Cloudflare / Namecheap / Porkbun):
+       - Record Type:           A
+       - Host / Name:           @ (or subdomain, e.g. 'play', 'mc', 'pal')
+       - Target / Value:        ${local.public_ip}
+       - Proxy Status:          DNS Only (Grey Cloud - do NOT proxy UDP/game traffic!)
+
+    3. ACTIVE GAME ENDPOINTS (Share these with players):
+       ${join("\n       ", [for k, v in local.enabled_game_ports : format("%-18s -> %s:%d/%s", k, local.public_ip, v.port, v.protocol)])}
+
+    4. WIREGUARD SETUP (For your home server):
+       a) Fetch VPS WireGuard Public Key:
+          ssh ${local.instance.admin_user}@${local.public_ip} sudo cat /etc/wireguard/server.pub
+
+       b) View ready-made /etc/wireguard/wg0.conf for home:
+          terraform output -raw home_wireguard_config
+    =============================================================================
+  EOT
+}
+
+

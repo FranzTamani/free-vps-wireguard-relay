@@ -49,7 +49,7 @@ flowchart TD
 
 1. **Strict Always Free Guardrails (ARM A1 Only)**:
    - Restricted strictly to **Ampere ARM** (`VM.Standard.A1.Flex`) for maximum performance-per-dollar and dedicated network bandwidth (1 Gbps per OCPU).
-   - **OCI Always Free Limits**: Oracle Cloud Infrastructure limits the Always Free Ampere A1 compute allocation to a maximum of **2 OCPUs and 12 GB of RAM** (totaling 1,500 OCPU hours and 9,000 GB hours per month), having halved these limits from the previous 4 OCPUs and 24 GB RAM allowance (see [InfoQ report](https://www.infoq.com/news/2026/07/oracle-cloud-free-tier-limits/) and [Oracle Free Tier Documentation](https://docs.oracle.com/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm)).
+   - **OCI Always Free Limits**: Oracle Cloud Infrastructure limits the Always Free Ampere A1 compute allocation to a maximum of **2 OCPUs and 12 GB of RAM** (totaling 1,500 OCPU hours and 9,000 GB hours per month).
    - **Instance Sizing**: This stack provisions **1 OCPU**, **6 GB RAM**, and a **50 GB block volume**, staying well within all Always Free thresholds while delivering dedicated 1 Gbps networking.
    - Built-in Terraform `precondition` blocks enforce these caps (max 2 OCPUs, 12 GB RAM, and 100 GB block storage).
    - Includes **1 OCI Reserved Public IP** (1 free per region) ensuring your public IP never changes across instance redeployments, so your DNS `A` records never break.
@@ -133,22 +133,25 @@ terraform apply -var="budget_alert_email=your-email@example.com"
 # Type 'yes' when prompted to confirm
 ```
 
-Once deployment completes (~1–2 minutes), Terraform displays your outputs, including your reserved public IP, SSH command, and game endpoints.
+Once deployment completes (~1–2 minutes), Terraform automatically prints the entire consolidated post-deployment summary and instructions block directly in your terminal.
+
+You can also redisplay this complete summary at any time by running:
+```bash
+terraform output -raw summary
+```
 
 ---
 
 ## Post-Deployment Setup
 
+Everything needed for post-deployment (DNS values, game endpoints, WireGuard commands) is included in the summary above:
+
 ### Step 5: Map Your DNS Record
-Retrieve the allocated reserved public IP:
-```bash
-terraform output dns_a_record_target
-```
-In your DNS provider (Cloudflare, Porkbun, Namecheap, etc.):
+From the summary output (or `terraform output dns_a_record_target`), configure your DNS provider (Cloudflare, Porkbun, Namecheap, etc.):
 - **Type**: `A`
 - **Name**: `play` (or `@` for root domain)
 - **Target / Value**: `<reserved_public_ip>`
-- **Proxy Status**: **DNS Only (Grey Cloud)** — *Crucial: do not proxy game traffic through Cloudflare HTTP CDN proxies.*
+- **Proxy Status**: **DNS Only (Grey Cloud)** — *Crucial: do not proxy UDP or game traffic through Cloudflare HTTP CDN proxies.*
 
 ---
 
