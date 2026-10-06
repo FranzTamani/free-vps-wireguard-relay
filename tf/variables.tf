@@ -30,7 +30,13 @@ variable "ssh_public_key" {
 }
 
 variable "budget_alert_email" {
-  description = "Optional recipient email address for zero-spend budget alerts. Pass via -var=\"budget_alert_email=...\" or TF_VAR_budget_alert_email to avoid committing your email."
+  description = "Optional recipient email address for zero-spend budget alerts. Set in terraform.tfvars (uncommitted) or pass via -var."
+  type        = string
+  default     = ""
+}
+
+variable "home_peer_public_key" {
+  description = "Optional WireGuard public key of the home server (from home.pub). Set in terraform.tfvars (uncommitted) or pass via -var."
   type        = string
   default     = ""
 }

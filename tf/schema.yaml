@@ -23,6 +23,10 @@ variableGroups:
     variables:
       - budget_alert_email
 
+  - title: "WireGuard"
+    variables:
+      - home_peer_public_key
+
 variables:
   compartment_ocid:
     type: oci:identity:compartment:id
@@ -40,4 +44,10 @@ variables:
     type: string
     title: "Budget Alert Email"
     description: "Optional email address to receive immediate alerts if actual tenancy spend hits $0.01 (free)."
+    required: false
+
+  home_peer_public_key:
+    type: string
+    title: "Home Peer Public Key"
+    description: "Optional WireGuard public key of your home game server (from home.pub)."
     required: false

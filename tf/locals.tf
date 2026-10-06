@@ -98,9 +98,9 @@ locals {
     server_address    = "10.66.66.1"
     home_peer_address = "10.66.66.2"
 
-    # Paste your HOME peer's public key here (`wg genkey | tee home.key | wg pubkey`).
+    # WireGuard public key of your home game server (set in terraform.tfvars).
     # While empty, the tunnel is up but no game traffic is forwarded.
-    home_peer_public_key = ""
+    home_peer_public_key = trimspace(var.home_peer_public_key)
 
     mtu = 1420
 
@@ -147,7 +147,7 @@ locals {
   # (Budgets are free. Strongly recommended if you upgrade to Pay-As-You-Go.)
   # ---------------------------------------------------------------------------
   budget = {
-    alert_email     = ""
+    alert_email     = trimspace(var.budget_alert_email)
     monthly_amount  = 1    # in your account currency
     alert_threshold = 0.01 # absolute amount of ACTUAL spend that triggers the email
   }

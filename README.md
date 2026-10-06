@@ -102,34 +102,30 @@ Download the required Oracle Cloud Infrastructure provider:
 terraform init
 ```
 
-### Step 3: Review the Execution Plan
-Generate and review the plan.
+### Step 3: Configure Local Variables (Uncommitted)
+To set sensitive or personalized values (such as your budget alert email or WireGuard public key) without committing them to Git, copy the example variable file:
+```bash
+cp terraform.tfvars.example terraform.tfvars
+```
+Edit `terraform.tfvars`:
+```hcl
+budget_alert_email   = "your-email@example.com"
+home_peer_public_key = "" # Add this in Step 6 once your home key is generated
+```
+> [!NOTE]
+> `terraform.tfvars` is ignored by Git (`*.tfvars` in `.gitignore`) and is automatically loaded by Terraform during `plan` and `apply` without requiring extra CLI flags.
 
-- **Option A (With zero-spend alert email passed via CLI)**:
-  ```bash
-  terraform plan -var="budget_alert_email=your-email@example.com"
-  ```
-- **Option B (Using environment variable so you don't type it each time)**:
-  ```bash
-  # PowerShell
-  $env:TF_VAR_budget_alert_email="your-email@example.com"
-  terraform plan
+### Step 4: Review the Execution Plan
+Generate and review the plan:
+```bash
+terraform plan
+```
+Terraform will automatically read your `~/.oci/config` profile, detect your tenancy and region, find the latest Ubuntu 24.04 ARM image, locate your `~/.ssh/id_ed25519.pub` file, and load `terraform.tfvars`.
 
-  # Bash / Linux / macOS
-  export TF_VAR_budget_alert_email="your-email@example.com"
-  terraform plan
-  ```
-- **Option C (Without budget alerts)**:
-  ```bash
-  terraform plan
-  ```
-
-Terraform will automatically read your `~/.oci/config` profile, detect your tenancy and region, find the latest Ubuntu 24.04 ARM image, and locate your `~/.ssh/id_ed25519.pub` file.
-
-### Step 4: Apply the Infrastructure
+### Step 5: Apply the Infrastructure
 Deploy the stack to Oracle Cloud:
 ```bash
-terraform apply -var="budget_alert_email=your-email@example.com"
+terraform apply
 # Type 'yes' when prompted to confirm
 ```
 
@@ -146,7 +142,7 @@ terraform output
 
 Everything needed for post-deployment (DNS values, game endpoints, WireGuard commands) is included in the summary above:
 
-### Step 5: Map Your DNS Record
+### Step 6: Map Your DNS Record
 From the summary output (or `terraform output dns_a_record_target`), configure your DNS provider (Cloudflare, Porkbun, Namecheap, etc.):
 - **Type**: `A`
 - **Name**: `play` (or `@` for root domain)
@@ -155,23 +151,20 @@ From the summary output (or `terraform output dns_a_record_target`), configure y
 
 ---
 
-### Step 6: Connect Your Home Game Server via WireGuard
+### Step 7: Connect Your Home Game Server via WireGuard
 
 1. **Generate a WireGuard key pair on your home server**:
    ```bash
    wg genkey | tee home.key | wg pubkey > home.pub
    ```
-2. **Add the home public key to the VPS configuration**:
-   Open [tf/locals.tf](tf/locals.tf) and paste the contents of `home.pub` into `wireguard.home_peer_public_key`:
+2. **Add the home public key to `terraform.tfvars`**:
+   Open `tf/terraform.tfvars` and paste the contents of `home.pub` into `home_peer_public_key`:
    ```hcl
-   wireguard = {
-     ...
-     home_peer_public_key = "PASTE_HOME_PUBLIC_KEY_HERE"
-   }
+   home_peer_public_key = "PASTE_CONTENTS_OF_home.pub_HERE"
    ```
    Apply the change (it updates in place on the running VPS within minutes without a rebuild):
    ```bash
-   terraform apply -var="budget_alert_email=your-email@example.com"
+   terraform apply
    ```
 
 3. **Fetch the VPS WireGuard public key**:

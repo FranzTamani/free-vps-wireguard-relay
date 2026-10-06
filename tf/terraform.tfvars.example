@@ -1,0 +1,14 @@
+# =============================================================================
+# Local Terraform Variables (Uncommitted)
+# Copy this file to terraform.tfvars:
+#   cp terraform.tfvars.example terraform.tfvars
+#
+# terraform.tfvars is ignored by Git (*.tfvars in .gitignore) and automatically
+# loaded by Terraform on plan and apply without needing extra CLI arguments.
+# =============================================================================
+
+# Optional: recipient email address for zero-spend budget alerts (free OCI budget)
+budget_alert_email = "your-email@example.com"
+
+# Optional: WireGuard public key of your home game server (contents of home.pub)
+home_peer_public_key = ""
