@@ -34,25 +34,26 @@ locals {
 
   # ---------------------------------------------------------------------------
   # Always Free guardrails - `terraform plan` FAILS if config exceeds these.
-  # Configured conservatively (below Oracle's 4 OCPU / 24 GB / 200 GB limits)
-  # so that if Oracle reduces limits or changes policies, you remain safe.
+  # OCI limits the Always Free Ampere A1 compute allocation to a maximum of
+  # 2 OCPUs and 12 GB of RAM (1,500 OCPU hours and 9,000 GB hours per month),
+  # having halved these limits from the previous 4 OCPU / 24 GB allowance.
   # ---------------------------------------------------------------------------
   free_tier = {
     allowed_shapes      = ["VM.Standard.A1.Flex"] # Strictly ARM Ampere
-    a1_max_ocpus        = 2   # Conservative cap (Oracle free ceiling is 4)
-    a1_max_memory_gbs   = 12  # Conservative cap (Oracle free ceiling is 24)
-    max_block_gbs       = 100 # Conservative cap (Oracle free ceiling is 200)
+    a1_max_ocpus        = 2   # Official OCI Always Free limit (1,500 OCPU-hrs/month)
+    a1_max_memory_gbs   = 12  # Official OCI Always Free limit (9,000 GB-hrs/month)
+    max_block_gbs       = 100 # Conservative block volume cap (limit is 200 GB)
     min_boot_volume_gbs = 47
   }
 
   # ---------------------------------------------------------------------------
-  # Instance
+  # Instance (1 OCPU, 6 GB RAM, 50 GB boot volume)
   # ---------------------------------------------------------------------------
   instance = {
     shape                   = "VM.Standard.A1.Flex" # ARM Ampere (1 Gbps per OCPU)
-    ocpus                   = 1                     # 1 OCPU = 1 Gbps networking (minimum for A1)
-    memory_in_gbs           = 6                     # 6 GB RAM (OCI default 1 OCPU : 6 GB ratio)
-    boot_volume_size_in_gbs = 47                    # 47 GB (OCI platform image minimum default)
+    ocpus                   = 1                     # 1 OCPU (1 Gbps bandwidth)
+    memory_in_gbs           = 6                     # 6 GB RAM
+    boot_volume_size_in_gbs = 50                    # 50 GB boot volume
     ubuntu_version          = "24.04"               # Minimal image (aarch64)
     hostname                = "free-vps"
     admin_user              = "ubuntu"              # Default non-root sudo user

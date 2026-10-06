@@ -49,7 +49,9 @@ flowchart TD
 
 1. **Strict Always Free Guardrails (ARM A1 Only)**:
    - Restricted strictly to **Ampere ARM** (`VM.Standard.A1.Flex`) for maximum performance-per-dollar and dedicated network bandwidth (1 Gbps per OCPU).
-   - Built-in Terraform `precondition` blocks enforce conservative caps (max **2 OCPUs**, **12 GB RAM**, and **100 GB storage**)—well below Oracle's official tenancy maximums (4 OCPU / 24 GB / 200 GB)—ensuring you stay completely safe even if Oracle decreases free tier limits or policy thresholds in the future.
+   - **OCI Always Free Limits**: Oracle Cloud Infrastructure limits the Always Free Ampere A1 compute allocation to a maximum of **2 OCPUs and 12 GB of RAM** (totaling 1,500 OCPU hours and 9,000 GB hours per month), having halved these limits from the previous 4 OCPUs and 24 GB RAM allowance (see [InfoQ report](https://www.infoq.com/news/2026/07/oracle-cloud-free-tier-limits/) and [Oracle Free Tier Documentation](https://docs.oracle.com/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm)).
+   - **Instance Sizing**: This stack provisions **1 OCPU**, **6 GB RAM**, and a **50 GB block volume**, staying well within all Always Free thresholds while delivering dedicated 1 Gbps networking.
+   - Built-in Terraform `precondition` blocks enforce these caps (max 2 OCPUs, 12 GB RAM, and 100 GB block storage).
    - Includes **1 OCI Reserved Public IP** (1 free per region) ensuring your public IP never changes across instance redeployments, so your DNS `A` records never break.
 2. **Single Source of Truth ([tf/locals.tf](tf/locals.tf))**:
    - Everything (OCI compartments, instance shape, game ports, SSH keys, WireGuard CIDRs, update schedule) is configured cleanly in one place.

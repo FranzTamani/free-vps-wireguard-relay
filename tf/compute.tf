@@ -84,14 +84,14 @@ resource "oci_core_instance" "vps" {
         local.instance.ocpus <= local.free_tier.a1_max_ocpus &&
         local.instance.memory_in_gbs <= local.free_tier.a1_max_memory_gbs
       )
-      error_message = "A1 config (${local.instance.ocpus} OCPU, ${local.instance.memory_in_gbs} GB) exceeds conservative guardrails (max ${local.free_tier.a1_max_ocpus} OCPU / ${local.free_tier.a1_max_memory_gbs} GB)."
+      error_message = "A1 config (${local.instance.ocpus} OCPU, ${local.instance.memory_in_gbs} GB) exceeds OCI Always Free limit (max ${local.free_tier.a1_max_ocpus} OCPU / ${local.free_tier.a1_max_memory_gbs} GB)."
     }
     precondition {
       condition = (
         local.instance.boot_volume_size_in_gbs >= local.free_tier.min_boot_volume_gbs &&
         local.instance.boot_volume_size_in_gbs <= local.free_tier.max_block_gbs
       )
-      error_message = "Boot volume must be between ${local.free_tier.min_boot_volume_gbs} and ${local.free_tier.max_block_gbs} GB to stay within conservative guardrails."
+      error_message = "Boot volume must be between ${local.free_tier.min_boot_volume_gbs} and ${local.free_tier.max_block_gbs} GB to stay within Always Free limits."
     }
     precondition {
       condition     = length(local.ssh_authorized_keys) > 0
