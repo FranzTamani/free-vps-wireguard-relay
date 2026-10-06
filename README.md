@@ -39,7 +39,7 @@ flowchart TD
     PublicIP --> NSG
     NSG --> IPTables
     IPTables -->|"DNAT forward"| WGServer
-    WGServer <==|"Encrypted WireGuard UDP :51820 Tunnel<br/>(Bypasses CGNAT)"|==> WGPilot
+    WGServer <-->|"Encrypted WireGuard UDP :51820 Tunnel<br/>(Bypasses CGNAT)"| WGPilot
     WGPilot --> GameServers
 ```
 
