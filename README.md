@@ -1,8 +1,5 @@
 # Free VPS WireGuard Relay
 
-> [!NOTE]
-> **DISCLAIMER**: This project was developed with the assistance of AI. However, I have a professional background working in cloud infrastructure and cybersecurity. The architecture, security hardening, firewall controls, and Terraform configurations were designed and vetted against cloud security best practices and Oracle Cloud Always Free guidelines.
-
 Bypass ISP CGNAT to host dedicated game servers (Minecraft, Palworld, etc.) or homelab services from home with **zero monthly fees**, using an **Oracle Cloud (OCI) Always Free VPS** as an encrypted, high-performance WireGuard relay.
 
 Compatible with both the **Local Terraform CLI** (zero-configuration auto-discovery) and **OCI Resource Manager**.
@@ -13,7 +10,7 @@ Compatible with both the **Local Terraform CLI** (zero-configuration auto-discov
 
 If your home ISP uses CGNAT (Carrier-Grade NAT) or blocks inbound ports, players on the internet cannot connect directly to your home computer. 
 
-This repository automatically provisions a **100% free cloud server** on Oracle Cloud with a static public IP address. It sets up an encrypted WireGuard tunnel between the Oracle VPS and your home server. When players connect to your cloud IP or domain name, traffic is instantly forwarded through the encrypted tunnel directly to your game server at home.
+This repository provisions a cloud server designed to run within Oracle Cloud's Always Free tier with a static public IP address. It sets up an encrypted WireGuard tunnel between the Oracle VPS and your home server. When players connect to your cloud IP or domain name, traffic is instantly forwarded through the encrypted tunnel directly to your game server at home.
 
 ```mermaid
 flowchart TD
@@ -231,3 +228,12 @@ Type `yes` when prompted. Everything created in your Oracle Cloud tenancy by thi
 > The running VPS does **not** need your OCI API key to operate. Deleting the key from Oracle Console ensures that even if your personal computer is ever compromised, no credentials exist on disk that could manage your Oracle Cloud account.
 >
 > When you eventually want to update configuration or delete the stack with `terraform destroy`, simply generate a new API key in the console and re-add it to your `~/.oci/config`.
+
+---
+
+## Disclaimers & Limitations of Liability
+
+> [!NOTE]
+> **Project Disclaimer**: This project was developed with the assistance of AI. However, I have a professional background working in cloud infrastructure and cybersecurity. The architecture, security hardening, firewall controls, and Terraform configurations were designed and vetted against cloud security best practices and Oracle Cloud Always Free guidelines.
+>
+> **Cost & Usage Disclaimer**: This software is provided under the MIT License "as is", without warranty of any kind. While this stack is engineered to operate strictly within Oracle Cloud Infrastructure's Always Free tier limits and includes budget safeguards, you are solely responsible for monitoring your own cloud tenancy and usage. The author/s assume no liability for any charges, service modifications, or account actions by Oracle.
