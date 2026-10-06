@@ -28,7 +28,7 @@ locals {
   name_prefix = "free-vps"
 
   freeform_tags = {
-    project    = "oracle-free-vps"
+    project    = "free-vps-wireguard-relay"
     managed-by = "terraform"
   }
 
@@ -136,7 +136,7 @@ locals {
   # ---------------------------------------------------------------------------
   self_update = {
     enabled  = false
-    repo_url = "https://github.com/FranzTamani/oracle-free-vps.git"
+    repo_url = "https://github.com/FranzTamani/free-vps-wireguard-relay.git"
     ref      = "main"            # branch or tag - pin to a tag (e.g. "v1.0.0") for stability
     path     = "tf/vps"          # directory inside the repo containing bin/ and systemd/
     schedule = "*-*-* 04:30:00"  # systemd OnCalendar (after the OS reboot window)
