@@ -1,0 +1,8 @@
+[Unit]
+Description=Converge VPS to desired state from instance metadata
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/vps/current/bin/vps-reconcile

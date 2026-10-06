@@ -1,0 +1,17 @@
+[Unit]
+Description=VPS host firewall and game port forwarding
+Documentation=file:///opt/vps/current/bin/vps-firewall
+# Run after Oracle's image rules are restored so our hooks end up on top.
+After=netfilter-persistent.service
+Before=network-online.target
+Wants=network-pre.target
+ConditionPathExists=/etc/vps/config.json
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=VPS_CONFIG=/etc/vps/config.json
+ExecStart=/opt/vps/current/bin/vps-firewall
+
+[Install]
+WantedBy=multi-user.target

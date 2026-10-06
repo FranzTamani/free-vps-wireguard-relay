@@ -1,0 +1,43 @@
+title: "Oracle Free VPS - WireGuard game relay"
+description: "Always Free A1 VPS that relays game traffic over WireGuard to a home server behind CGNAT. Detailed settings live in locals.tf."
+schemaVersion: 1.1.0
+version: "20261006"
+locale: "en"
+
+variableGroups:
+  - title: "Hidden (injected by Resource Manager)"
+    visible: false
+    variables:
+      - tenancy_ocid
+      - region
+
+  - title: "Placement"
+    variables:
+      - compartment_ocid
+
+  - title: "Access"
+    variables:
+      - ssh_public_key
+
+  - title: "Cost Guard"
+    variables:
+      - budget_alert_email
+
+variables:
+  compartment_ocid:
+    type: oci:identity:compartment:id
+    title: "Compartment"
+    description: "Compartment to deploy the VPS into."
+    required: true
+
+  ssh_public_key:
+    type: oci:core:ssh:publickey
+    title: "SSH public key"
+    description: "Key authorised for the non-root admin user (root login is disabled)."
+    required: true
+
+  budget_alert_email:
+    type: string
+    title: "Budget Alert Email"
+    description: "Optional email address to receive immediate alerts if actual tenancy spend hits $0.01 (free)."
+    required: false

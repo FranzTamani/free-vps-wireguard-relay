@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Pull desired state from instance metadata (`vps_config`, set by Terraform) and converge.
+# - No-op if unchanged (unless --force).
+# - Applies to a candidate first; only promotes it to last-known-good after a passing
+#   health check, otherwise re-applies the last-known-good config.
+# - A config that failed once is not retried until it changes (or --force).
+source "$(dirname "$(readlink -f "$0")")/vps-lib.sh"
+require_root
+acquire_lock
+
+FORCE=0
+[[ "${1:-}" == "--force" ]] && FORCE=1
+
+GOOD="$VPS_ETC/config.json"
+CANDIDATE="$VPS_ETC/config.candidate.json"
+FAILED_HASH="$VPS_ETC/config.failed.sha256"
+install -d -m 0700 "$VPS_ETC"
+
+if ! curl -fsS --max-time 10 --retry 3 -H 'Authorization: Bearer Oracle' \
+  "$IMDS_BASE/instance/metadata/vps_config" -o "$CANDIDATE"; then
+  if [[ -f "$GOOD" ]]; then
+    log "metadata unavailable - using last-known-good config"
+    cp "$GOOD" "$CANDIDATE"
+  else
+    die "metadata unavailable and no last-known-good config"
+  fi
+fi
+
+jq -e 'type == "object"' "$CANDIDATE" >/dev/null || die "vps_config is not a JSON object"
+check_schema "$CANDIDATE"
+
+hash="$(sha256sum "$CANDIDATE" | cut -d' ' -f1)"
+if ((!FORCE)); then
+  if [[ -f "$GOOD" ]] && cmp -s "$CANDIDATE" "$GOOD"; then rm -f "$CANDIDATE"; exit 0; fi
+  if [[ -f "$FAILED_HASH" && "$(cat "$FAILED_HASH")" == "$hash" ]]; then
+    rm -f "$CANDIDATE"
+    exit 0
+  fi
+fi
+
+log "applying configuration ${hash:0:12}"
+if VPS_CONFIG="$CANDIDATE" "$SCRIPT_DIR/vps-apply" && VPS_CONFIG="$CANDIDATE" "$SCRIPT_DIR/vps-healthcheck"; then
+  mv -f "$CANDIDATE" "$GOOD"
+  rm -f "$FAILED_HASH"
+  log "configuration ${hash:0:12} applied and healthy"
+else
+  echo "$hash" >"$FAILED_HASH"
+  log "configuration ${hash:0:12} FAILED - rolling back to last-known-good"
+  rm -f "$CANDIDATE"
+  if [[ -f "$GOOD" ]]; then VPS_CONFIG="$GOOD" "$SCRIPT_DIR/vps-apply" || log "rollback apply also failed!"; fi
+  exit 1
+fi

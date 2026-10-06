@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Exit non-zero if the box is not in a safe, working state. Used to gate config
+# promotion (vps-reconcile) and script releases (vps-self-update).
+source "$(dirname "$(readlink -f "$0")")/vps-lib.sh"
+require_root
+
+WG_IF="$(cfg .wireguard.interface)"
+ok=1
+
+check() {
+  local desc="$1"; shift
+  if "$@" >/dev/null 2>&1; then
+    log "ok:   $desc"
+  else
+    log "FAIL: $desc"
+    ok=0
+  fi
+}
+
+mkdir -p /run/sshd
+check "sshd config valid"        sshd -t
+check "ssh listening on :22"     bash -c "ss -Htln 'sport = :22' | grep -q ."
+check "firewall hooked"          iptables -C INPUT -j VPS-INPUT
+check "firewall allows ssh"      iptables -C VPS-INPUT -p tcp --dport 22 -j ACCEPT
+check "ip forwarding enabled"    bash -c '[[ "$(sysctl -n net.ipv4.ip_forward)" == 1 ]]'
+check "wireguard ${WG_IF} up"    ip link show dev "$WG_IF"
+check "admin user exists"        id "$(cfg .admin_user)"
+
+if ((ok)); then exit 0; fi
+exit 1

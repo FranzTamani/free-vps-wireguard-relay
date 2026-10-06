@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# Host firewall + port forwarding (defence in depth behind the OCI NSG).
+# Our rules live in dedicated VPS-* chains, replaced atomically via iptables-restore,
+# and hooked at the top of the built-in chains. Oracle's image rules below them are left alone.
+source "$(dirname "$(readlink -f "$0")")/vps-lib.sh"
+require_root
+
+WG_IF="$(cfg .wireguard.interface)"
+WG_PORT="$(cfg .wireguard.port)"
+HOME_IP="$(cfg .wireguard.home_peer_address)"
+PEER_KEY="$(cfg '.wireguard.home_peer_public_key // ""')"
+PRESERVE="$(cfg .wireguard.preserve_client_ip)"
+
+forwards=()
+if [[ -n "$PEER_KEY" ]]; then
+  mapfile -t forwards < <(jq -r '.forwards[] | "\(.protocol) \(.port)"' "$VPS_CONFIG")
+fi
+
+rules="$(mktemp)"
+trap 'rm -f "$rules"' EXIT
+
+{
+  echo '*filter'
+  echo ':VPS-INPUT - [0:0]'
+  echo ':VPS-FORWARD - [0:0]'
+  echo '-F VPS-INPUT'
+  echo '-F VPS-FORWARD'
+  echo '-A VPS-INPUT -i lo -j ACCEPT'
+  echo '-A VPS-INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT'
+  echo '-A VPS-INPUT -m conntrack --ctstate INVALID -j DROP'
+  echo '-A VPS-INPUT -p icmp -j ACCEPT'
+  echo '-A VPS-INPUT -p tcp --dport 22 -j ACCEPT'
+  echo "-A VPS-INPUT -p udp --dport ${WG_PORT} -j ACCEPT"
+  echo '-A VPS-INPUT -j DROP'
+
+  echo '-A VPS-FORWARD -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT'
+  echo '-A VPS-FORWARD -m conntrack --ctstate INVALID -j DROP'
+  for f in "${forwards[@]}"; do
+    read -r proto port <<<"$f"
+    echo "-A VPS-FORWARD ! -i ${WG_IF} -o ${WG_IF} -d ${HOME_IP} -p ${proto} --dport ${port} -m conntrack --ctstate NEW -j ACCEPT"
+  done
+  echo '-A VPS-FORWARD -j DROP'
+  echo 'COMMIT'
+
+  echo '*nat'
+  echo ':VPS-PREROUTING - [0:0]'
+  echo ':VPS-POSTROUTING - [0:0]'
+  echo '-F VPS-PREROUTING'
+  echo '-F VPS-POSTROUTING'
+  for f in "${forwards[@]}"; do
+    read -r proto port <<<"$f"
+    echo "-A VPS-PREROUTING ! -i ${WG_IF} -m addrtype --dst-type LOCAL -p ${proto} --dport ${port} -j DNAT --to-destination ${HOME_IP}:${port}"
+  done
+  if [[ "$PRESERVE" != true ]]; then
+    echo "-A VPS-POSTROUTING -o ${WG_IF} -d ${HOME_IP} -j MASQUERADE"
+  fi
+  echo 'COMMIT'
+
+  echo '*mangle'
+  echo ':VPS-MSS - [0:0]'
+  echo '-F VPS-MSS'
+  echo "-A VPS-MSS -o ${WG_IF} -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu"
+  echo "-A VPS-MSS -i ${WG_IF} -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu"
+  echo 'COMMIT'
+} >"$rules"
+
+iptables-restore --noflush <"$rules"
+
+ensure_jump() { iptables -t "$1" -C "$2" -j "$3" 2>/dev/null || iptables -t "$1" -I "$2" 1 -j "$3"; }
+ensure_jump filter INPUT VPS-INPUT
+ensure_jump filter FORWARD VPS-FORWARD
+ensure_jump nat PREROUTING VPS-PREROUTING
+ensure_jump nat POSTROUTING VPS-POSTROUTING
+ensure_jump mangle FORWARD VPS-MSS
+
+log "firewall applied (${#forwards[@]} forwards, preserve_client_ip=${PRESERVE})"

@@ -1,0 +1,20 @@
+#cloud-config
+# Bootstrap only. Ongoing configuration is pulled from instance metadata (`vps_config`)
+# by vps-reconcile.timer, so most locals.tf changes apply in place without a rebuild.
+ssh_pwauth: false
+disable_root: true
+package_update: false
+package_upgrade: false
+
+write_files:
+%{ for path, content in files ~}
+  - path: /opt/vps/releases/bootstrap/${path}
+    permissions: "${startswith(path, "bin/") ? "0755" : "0644"}"
+    owner: root:root
+    content: |
+      ${indent(6, content)}
+%{ endfor ~}
+
+runcmd:
+  - [ln, -sfn, /opt/vps/releases/bootstrap, /opt/vps/current]
+  - [/opt/vps/current/bin/vps-bootstrap]

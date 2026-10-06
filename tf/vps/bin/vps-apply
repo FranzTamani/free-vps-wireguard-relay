@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+# Idempotently converge the host to the state described in $VPS_CONFIG.
+source "$(dirname "$(readlink -f "$0")")/vps-lib.sh"
+require_root
+acquire_lock
+check_schema
+
+ADMIN_USER="$(cfg .admin_user)"
+
+install_units() {
+  local changed=0 unit
+  for unit in "$VPS_RELEASE_DIR"/systemd/*; do
+    if write_if_changed "/etc/systemd/system/$(basename "$unit")" 0644 <"$unit"; then changed=1; fi
+  done
+  if ((changed)); then systemctl daemon-reload; fi
+  systemctl enable vps-firewall.service vps-reconcile.timer >/dev/null 2>&1
+  systemctl start vps-reconcile.timer
+}
+
+apply_timezone() {
+  local tz; tz="$(cfg .timezone)"
+  if [[ "$(timedatectl show -p Timezone --value)" != "$tz" ]]; then
+    timedatectl set-timezone "$tz"
+    log "timezone -> $tz"
+  fi
+}
+
+apply_sysctl() {
+  if write_if_changed /etc/modules-load.d/vps.conf 0644 <<<"tcp_bbr"; then modprobe tcp_bbr || true; fi
+  if write_if_changed /etc/sysctl.d/99-vps.conf 0644 <<'EOF'
+# Managed by vps-apply
+net.ipv4.ip_forward = 1
+net.ipv4.conf.all.src_valid_mark = 1
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+net.core.rmem_max = 4194304
+net.core.wmem_max = 4194304
+EOF
+  then
+    sysctl --system >/dev/null
+    log "sysctl updated"
+  fi
+}
+
+apply_ssh() {
+  local f=/etc/ssh/sshd_config.d/01-vps-hardening.conf
+  # Lowest-numbered drop-in wins in sshd, so this overrides image defaults.
+  if write_if_changed "$f" 0644 <<EOF
+# Managed by vps-apply - do not edit by hand.
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+AuthenticationMethods publickey
+AllowUsers ${ADMIN_USER}
+MaxAuthTries 3
+LoginGraceTime 20
+X11Forwarding no
+EOF
+  then
+    mkdir -p /run/sshd
+    if sshd -t; then
+      systemctl try-reload-or-restart ssh.service || true
+      log "sshd hardening applied"
+    else
+      rm -f "$f"
+      die "sshd config invalid - hardening drop-in removed"
+    fi
+  fi
+}
+
+apply_wireguard() {
+  local ifc port addr prefix mtu peer_key peer_ip
+  ifc="$(cfg .wireguard.interface)"
+  port="$(cfg .wireguard.port)"
+  addr="$(cfg .wireguard.server_address)"
+  prefix="$(cfg .wireguard.tunnel_cidr | cut -d/ -f2)"
+  mtu="$(cfg .wireguard.mtu)"
+  peer_key="$(cfg '.wireguard.home_peer_public_key // ""')"
+  peer_ip="$(cfg .wireguard.home_peer_address)"
+
+  ensure_wg_keys
+
+  if {
+    cat <<EOF
+# Managed by vps-apply - do not edit by hand.
+[Interface]
+Address = ${addr}/${prefix}
+ListenPort = ${port}
+MTU = ${mtu}
+PostUp = wg set %i private-key /etc/wireguard/server.key
+EOF
+    if [[ -n "$peer_key" ]]; then
+      cat <<EOF
+
+[Peer]
+# Home game server (behind CGNAT). It dials in, so no Endpoint is set here.
+PublicKey = ${peer_key}
+AllowedIPs = ${peer_ip}/32
+EOF
+    fi
+  } | write_if_changed "/etc/wireguard/${ifc}.conf" 0600; then
+    systemctl enable "wg-quick@${ifc}" >/dev/null 2>&1
+    systemctl restart "wg-quick@${ifc}"
+    log "wireguard ${ifc} (re)configured"
+  else
+    systemctl enable --now "wg-quick@${ifc}" >/dev/null 2>&1
+  fi
+}
+
+apply_os_updates() {
+  local enabled include reboot reboot_time periodic=0
+  enabled="$(cfg .os_updates.enabled)"
+  include="$(cfg .os_updates.include_non_security)"
+  reboot="$(cfg .os_updates.auto_reboot)"
+  reboot_time="$(cfg .os_updates.reboot_time)"
+  [[ "$enabled" == true ]] && periodic=1
+
+  write_if_changed /etc/apt/apt.conf.d/20auto-upgrades 0644 <<EOF || true
+// Managed by vps-apply
+APT::Periodic::Update-Package-Lists "${periodic}";
+APT::Periodic::Unattended-Upgrade "${periodic}";
+APT::Periodic::AutocleanInterval "7";
+EOF
+
+  # Layered on top of the stock 50unattended-upgrades (which already allows -security).
+  {
+    echo '// Managed by vps-apply'
+    if [[ "$include" == true ]]; then
+      echo 'Unattended-Upgrade::Allowed-Origins { "${distro_id}:${distro_codename}-updates"; };'
+    fi
+    echo "Unattended-Upgrade::Automatic-Reboot \"${reboot}\";"
+    echo "Unattended-Upgrade::Automatic-Reboot-Time \"${reboot_time}\";"
+    echo 'Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";'
+    echo 'Unattended-Upgrade::Remove-Unused-Dependencies "true";'
+  } | write_if_changed /etc/apt/apt.conf.d/52vps-unattended-upgrades 0644 || true
+}
+
+apply_self_update() {
+  local enabled schedule
+  enabled="$(cfg .self_update.enabled)"
+  schedule="$(cfg .self_update.schedule)"
+
+  if printf '[Timer]\nOnCalendar=\nOnCalendar=%s\n' "$schedule" |
+    write_if_changed /etc/systemd/system/vps-self-update.timer.d/schedule.conf 0644; then
+    systemctl daemon-reload
+  fi
+
+  if [[ "$enabled" == true ]]; then
+    systemctl enable --now vps-self-update.timer >/dev/null 2>&1
+  else
+    systemctl disable --now vps-self-update.timer >/dev/null 2>&1 || true
+  fi
+}
+
+install_units
+apply_timezone
+apply_sysctl
+apply_ssh
+apply_wireguard
+"$SCRIPT_DIR/vps-firewall"
+apply_os_updates
+apply_self_update
+log "apply complete"

@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Pull a new release of these scripts from Git, switch to it, health-check, and
+# roll back automatically on failure. Enabled via self_update.enabled in locals.tf.
+source "$(dirname "$(readlink -f "$0")")/vps-lib.sh"
+require_root
+acquire_lock
+
+REPO_URL="$(cfg .self_update.repo_url)"
+REF="$(cfg .self_update.ref)"
+SUBPATH="$(cfg .self_update.path)"
+RELEASES="$VPS_ROOT/releases"
+KEEP=3
+
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+
+log "fetching ${REPO_URL}@${REF}"
+git clone --quiet --depth 1 --branch "$REF" "$REPO_URL" "$work/repo"
+sha="$(git -C "$work/repo" rev-parse --short=12 HEAD)"
+src="$work/repo/$SUBPATH"
+new="$RELEASES/$sha"
+previous="$(readlink -f "$VPS_ROOT/current")"
+
+if [[ "$previous" == "$new" ]]; then
+  log "already on $sha"
+  exit 0
+fi
+
+# --- Validate before touching anything --------------------------------------
+for f in vps-lib.sh vps-apply vps-reconcile vps-firewall vps-healthcheck vps-self-update; do
+  [[ -f "$src/bin/$f" ]] || die "release $sha missing bin/$f - refusing"
+  bash -n "$src/bin/$f" || die "release $sha bin/$f has syntax errors - refusing"
+done
+# New scripts must understand the current config schema.
+(source "$src/bin/vps-lib.sh" && check_schema "$VPS_ETC/config.json") ||
+  die "release $sha does not support current config schema - refusing"
+
+# --- Switch -------------------------------------------------------------------
+rm -rf "$new"
+cp -a "$src" "$new"
+find "$new" -type f -exec sed -i 's/\r$//' {} +
+chmod 0755 "$new"/bin/*
+ln -sfn "$new" "$VPS_ROOT/current.next" && mv -Tf "$VPS_ROOT/current.next" "$VPS_ROOT/current"
+log "switched to $sha, applying"
+
+if "$new/bin/vps-reconcile" --force && "$new/bin/vps-healthcheck"; then
+  log "release $sha healthy"
+  # Prune old releases (never the bootstrap copy, current or previous).
+  ls -1dt "$RELEASES"/*/ 2>/dev/null | sed 's:/$::' |
+    grep -vxF -e "$RELEASES/bootstrap" -e "$new" -e "$previous" |
+    tail -n +$((KEEP + 1)) | xargs -r rm -rf
+else
+  log "release $sha FAILED - rolling back to $(basename "$previous")"
+  ln -sfn "$previous" "$VPS_ROOT/current.next" && mv -Tf "$VPS_ROOT/current.next" "$VPS_ROOT/current"
+  "$previous/bin/vps-reconcile" --force || log "rollback reconcile failed!"
+  exit 1
+fi

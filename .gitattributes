@@ -1,0 +1,4 @@
+# Shell scripts and systemd units run on Linux - never convert to CRLF.
+tf/vps/** text eol=lf
+*.sh      text eol=lf
+*.tftpl   text eol=lf

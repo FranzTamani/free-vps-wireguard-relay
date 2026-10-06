@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# First-boot provisioning. Run once by cloud-init.
+source "$(dirname "$(readlink -f "$0")")/vps-lib.sh"
+require_root
+
+export DEBIAN_FRONTEND=noninteractive
+APT_OPTS=(-y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold)
+PACKAGES=(wireguard-tools jq curl git iptables ca-certificates unattended-upgrades)
+
+retry() {
+  local n=0
+  until "$@"; do
+    n=$((n + 1))
+    if ((n >= 5)); then return 1; fi
+    log "retry $n/5: $*"
+    sleep $((n * 15))
+  done
+}
+
+# The reserved public IP is attached shortly AFTER the instance starts, so wait for egress.
+log "waiting for outbound connectivity"
+for _ in $(seq 1 60); do
+  if curl -fsS -m 5 -o /dev/null http://ports.ubuntu.com/; then break; fi
+  sleep 10
+done
+
+log "installing packages: ${PACKAGES[*]}"
+retry apt-get update
+retry apt-get install "${APT_OPTS[@]}" --no-install-recommends "${PACKAGES[@]}"
+
+log "bringing OS fully up to date"
+retry apt-get dist-upgrade "${APT_OPTS[@]}"
+apt-get autoremove -y --purge || true
+
+install -d -m 0700 "$VPS_ETC"
+ensure_wg_keys
+
+"$SCRIPT_DIR/vps-reconcile" --force
+
+touch "$VPS_ETC/.bootstrapped"
+log "bootstrap complete"
+log "WIREGUARD_SERVER_PUBLIC_KEY=$(cat /etc/wireguard/server.pub)"
+
+if [[ -f /var/run/reboot-required ]]; then
+  log "rebooting to load updated kernel/libraries"
+  shutdown -r +1 "vps-bootstrap: reboot after first-boot upgrades" || true
+fi

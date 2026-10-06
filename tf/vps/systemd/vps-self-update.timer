@@ -1,0 +1,11 @@
+[Unit]
+Description=Scheduled self-update of VPS management scripts
+
+[Timer]
+# Overridden by vps-apply from self_update.schedule (timer.d/schedule.conf).
+OnCalendar=*-*-* 04:30:00
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
