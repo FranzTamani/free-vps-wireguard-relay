@@ -1,0 +1,17 @@
+[Unit]
+Description=VPS anti-idle keepalive (prevent Always Free instance reclamation)
+Documentation=file:///opt/vps/current/bin/vps-anti-idle
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/vps/current/bin/vps-anti-idle
+Restart=always
+RestartSec=10
+Nice=19
+CPUSchedulingPolicy=other
+IOSchedulingClass=idle
+OOMScoreAdjust=900
+
+[Install]
+WantedBy=multi-user.target

@@ -153,6 +153,19 @@ apply_self_update() {
   fi
 }
 
+apply_anti_idle() {
+  local enabled
+  enabled="$(cfg '.anti_idle.enabled // true')"
+  if [[ "$enabled" == true ]]; then
+    systemctl enable --now vps-anti-idle.service >/dev/null 2>&1
+    systemctl restart vps-anti-idle.service >/dev/null 2>&1 || true
+    log "anti-idle service enabled"
+  else
+    systemctl disable --now vps-anti-idle.service >/dev/null 2>&1 || true
+    log "anti-idle service disabled"
+  fi
+}
+
 install_units
 apply_timezone
 apply_sysctl
@@ -161,4 +174,5 @@ apply_wireguard
 "$SCRIPT_DIR/vps-firewall"
 apply_os_updates
 apply_self_update
+apply_anti_idle
 log "apply complete"

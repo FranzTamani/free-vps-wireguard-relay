@@ -27,7 +27,7 @@ if [[ "$previous" == "$new" ]]; then
 fi
 
 # --- Validate before touching anything --------------------------------------
-for f in vps-lib.sh vps-apply vps-reconcile vps-firewall vps-healthcheck vps-self-update; do
+for f in vps-lib.sh vps-apply vps-reconcile vps-firewall vps-healthcheck vps-self-update vps-anti-idle; do
   [[ -f "$src/bin/$f" ]] || die "release $sha missing bin/$f - refusing"
   bash -n "$src/bin/$f" || die "release $sha bin/$f has syntax errors - refusing"
 done

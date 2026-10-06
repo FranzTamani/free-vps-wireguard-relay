@@ -69,6 +69,34 @@ flowchart TD
    - **Git Self-Update (Optional flag)**: Can pull versioned management script updates from Git with syntax checks, health checks, and automatic rollback.
 6. **Zero-Dollar Budget Guard**:
    - Optional budget alert that triggers if actual spend hits **$0.01**. Pass your email directly to the CLI command or environment variable without committing it to Git.
+7. **Anti-Idle Keepalive (Reclamation Guard)**:
+   - For free tier accounts, Oracle actively reclaims instances if CPU and memory utilization stay below 20% over 7 days.
+   - Built-in background service (`vps-anti-idle.service`) maintains ~25% CPU and ~25% memory utilization to prevent instance reclamation.
+   - Operates at lowest scheduling priority (`nice 19`, idle I/O class, OOM score 900) and automatically yields CPU/memory to user traffic.
+   - Can be toggled on/off in `terraform.tfvars` or `locals.tf` (can be disabled on Pay-As-You-Go accounts).
+
+---
+
+## Free Tier Comparison: Standard (Non-PAYG) vs. Pay-As-You-Go (PAYG)
+
+Oracle Cloud offers two account statuses that can access the **Always Free** tier. Both have access to the exact same $0 free resource allowances, but differ significantly in reclamation policies and capacity provisioning:
+
+| Feature / Resource | Standard Free Tier (Non-PAYG) | Pay-As-You-Go (PAYG) |
+| :--- | :--- | :--- |
+| **Always Free Compute** | Up to **2 OCPUs & 12 GB RAM** (Ampere A1 ARM) | Up to **2 OCPUs & 12 GB RAM** (Ampere A1 ARM) |
+| **Always Free Storage** | **200 GB** total block volumes (boot + block) | **200 GB** total block volumes (boot + block) |
+| **Outbound Data Transfer**| **10 TB / month** free outbound data transfer | **10 TB / month** free outbound data transfer |
+| **Public IPv4 Address** | **1x Reserved Public IPv4** free | **1x Reserved Public IPv4** free |
+| **Idle Reclamation Policy** | ⚠️ **Active reclamation**: Instances with <20% CPU and <20% memory over 7 days (95th percentile) are stopped/reclaimed. | ✅ **Exempt from reclamation**: Paid/PAYG accounts are never reclaimed for inactivity, even at 0% load. |
+| **Anti-Idle Keepalive** | **Recommended**: Keep `anti_idle_enabled = true` to maintain >20% load. | **Optional**: Set `anti_idle_enabled = false` for zero background load. |
+| **A1 Capacity Allocation** | Low provisioning priority; frequent `Out of host capacity` errors in popular regions. | High provisioning priority; significantly higher chance to provision ARM instances. |
+| **Cost & Billing Guard** | Cannot exceed limits (hard stops on free tier). | Guarded by built-in `budget.tf` alert ($0.01 threshold). Stays $0 if within limits. |
+
+> [!TIP]
+> **Why Upgrade to PAYG?**
+> Upgrading your OCI account to Pay-As-You-Go (PAYG) does **not** cost money as long as you stay within the Always Free limits (enforced by this stack's Terraform preconditions). Upgrading bypasses host capacity bottlenecks and permanently eliminates Oracle's idle instance reclamation policy.
+>
+> If you choose to stay on **Standard Free Tier**, this stack includes an automated **Anti-Idle Keepalive** background task enabled by default to prevent your instance from being reclaimed.
 
 ---
 
@@ -110,7 +138,8 @@ cp terraform.tfvars.example terraform.tfvars
 Edit `terraform.tfvars`:
 ```hcl
 budget_alert_email   = "your-email@example.com"
-home_peer_public_key = "" # Add this in Step 6 once your home key is generated
+home_peer_public_key = ""     # Add this in Step 7 once your home key is generated
+anti_idle_enabled    = true   # Set to false if your account is upgraded to PAYG
 ```
 > [!NOTE]
 > `terraform.tfvars` is ignored by Git (`*.tfvars` in `.gitignore`) and is automatically loaded by Terraform during `plan` and `apply` without requiring extra CLI flags.

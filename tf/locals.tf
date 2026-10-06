@@ -151,4 +151,18 @@ locals {
     monthly_amount  = 1    # in your account currency
     alert_threshold = 0.01 # absolute amount of ACTUAL spend that triggers the email
   }
+
+  # ---------------------------------------------------------------------------
+  # Anti-idle keepalive (prevent Oracle Always Free instance reclamation)
+  # Free Tier (non-PAYG) instances are reclaimed by Oracle if CPU and Memory
+  # utilization stay below 20% (95th percentile over 7 days).
+  # This background service maintains steady ~25% CPU and memory at lowest priority (nice 19).
+  # Pay-As-You-Go (PAYG) accounts are immune to reclamation; PAYG users can set
+  # this to false.
+  # ---------------------------------------------------------------------------
+  anti_idle = {
+    enabled           = var.anti_idle_enabled
+    cpu_target_pct    = 25 # Target CPU utilization (percent across all cores)
+    memory_target_pct = 25 # Target memory utilization (percent of total RAM)
+  }
 }

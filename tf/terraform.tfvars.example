@@ -12,3 +12,7 @@ budget_alert_email = "your-email@example.com"
 
 # Optional: WireGuard public key of your home game server (contents of home.pub)
 home_peer_public_key = ""
+
+# Optional: Keep server CPU and memory >20% to prevent Oracle Always Free reclamation (non-PAYG)
+# Defaults to true. Set to false if your account is upgraded to Pay-As-You-Go (PAYG).
+anti_idle_enabled = true
