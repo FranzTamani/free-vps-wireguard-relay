@@ -61,7 +61,7 @@ flowchart TD
 
 ## Free Tier: Standard (Non-PAYG) vs. Pay-As-You-Go (PAYG)
 
-By default, this stack deploys a lean **1 OCPU / 1 GB RAM / 50 GB boot volume** instance (configured in [tf/locals.tf](tf/locals.tf)). Under Oracle Cloud's reclamation policy, **memory utilization is only evaluated for Ampere A1 (ARM) instances** (legacy AMD/x86 shapes only check CPU and network). Because our stack runs on ARM, keeping memory at 1 GB ensures baseline OS and service usage naturally stays above Oracle's 20% threshold (~25–35%) even while idle, preventing automated instance reclamation without needing artificial load generators.
+By default, this stack deploys a lean **1 OCPU / 1 GB RAM / 50 GB boot volume** instance (configured in [tf/locals.tf](tf/locals.tf)). Under Oracle Cloud's reclamation policy, **memory utilization is only evaluated for Ampere A1 (ARM) instances** (legacy AMD/x86 shapes only check CPU and network). Because our stack runs on ARM, keeping memory at 1 GB ensures baseline OS and service usage naturally stays above Oracle's 20% threshold (~25–35%) even while idle, preventing automated instance reclamation.
 
 | Feature | Standard Free Tier (Non-PAYG) | Pay-As-You-Go (PAYG) |
 | :--- | :--- | :--- |
