@@ -61,12 +61,12 @@ flowchart TD
 
 ## Free Tier: Standard (Non-PAYG) vs. Pay-As-You-Go (PAYG)
 
-By default, this stack deploys a lean **1 OCPU / 1 GB RAM / 50 GB boot volume** instance (configured in [tf/locals.tf](tf/locals.tf)). We intentionally keep the spec low so baseline system and memory utilization naturally stays above 20% even while idle, preventing Oracle Always Free instance reclamation without needing artificial load generators.
+By default, this stack deploys a lean **1 OCPU / 1 GB RAM / 50 GB boot volume** instance (configured in [tf/locals.tf](tf/locals.tf)). Under Oracle Cloud's reclamation policy, **memory utilization is only evaluated for Ampere A1 (ARM) instances** (legacy AMD/x86 shapes only check CPU and network). Because our stack runs on ARM, keeping memory at 1 GB ensures baseline OS and service usage naturally stays above Oracle's 20% threshold (~25–35%) even while idle, preventing automated instance reclamation without needing artificial load generators.
 
 | Feature | Standard Free Tier (Non-PAYG) | Pay-As-You-Go (PAYG) |
 | :--- | :--- | :--- |
 | **Default Spec** | 1 OCPU, 1 GB RAM (keeps idle usage >20%) | 1 OCPU, 1 GB RAM, 50 GB boot volume |
-| **Idle Reclamation** | 🛡️ **Protected**: Baseline system usage on 1 GB RAM stays above Oracle's 20% threshold (~25–35%). | ✅ **Exempt**: Oracle never reclaims idle instances on PAYG accounts. |
+| **Idle Reclamation** | 🛡️ **Protected**: Memory is checked on ARM A1 shapes; 1 GB RAM keeps baseline idle usage safely above Oracle's 20% threshold (~25–35%). | ✅ **Exempt**: Oracle never reclaims idle instances on PAYG accounts. |
 | **A1 ARM Availability** | Low priority; frequent `Out of host capacity` errors. | High priority; easy to launch ARM instances. |
 | **Spend Safety** | Hard limits; cannot incur accidental charges. | Protected by our built-in `$0.01` budget alert ([tf/budget.tf](tf/budget.tf)). |
 

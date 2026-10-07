@@ -52,7 +52,7 @@ locals {
   instance = {
     shape                   = "VM.Standard.A1.Flex" # ARM Ampere (1 Gbps per OCPU)
     ocpus                   = 1                     # 1 OCPU (1 Gbps bandwidth)
-    memory_in_gbs           = 1                     # 1 GB RAM (keeps idle memory >20% to avoid reclamation)
+    memory_in_gbs           = 1                     # 1 GB RAM (keeps idle memory >20% on ARM A1 to avoid reclamation)
     boot_volume_size_in_gbs = 50                    # 50 GB boot volume
     ubuntu_version          = "24.04"               # Minimal image (aarch64)
     hostname                = "free-vps"
