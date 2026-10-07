@@ -1,250 +1,373 @@
 # Free VPS WireGuard Relay
 
-Bypass ISP CGNAT to host dedicated game servers (Minecraft, Palworld, etc.) or homelab services from home with **zero monthly fees**, using an **Oracle Cloud (OCI) Always Free VPS** as an encrypted, high-performance WireGuard relay.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Terraform](https://img.shields.io/badge/Terraform-1.5%2B-purple.svg)](https://www.terraform.io/)
+[![Oracle Cloud](https://img.shields.io/badge/Oracle_Cloud-Always_Free-red.svg)](https://www.oracle.com/cloud/free/)
+[![WireGuard](https://img.shields.io/badge/WireGuard-Encrypted_Tunnel-darkred.svg)](https://www.wireguard.com/)
 
-Compatible with both the **Local Terraform CLI** (zero-configuration auto-discovery) and **OCI Resource Manager**.
+Host dedicated game servers (Minecraft, Palworld, etc.) or homelab services from home with **zero monthly fees** and **no port forwarding required**. 
+
+This stack automatically deploys an **Oracle Cloud Always Free VPS** to act as a secure, high-speed public relay that bypasses ISP CGNAT and routes players straight to your home machine.
 
 ---
 
 ## Table of Contents
 
-- [How It Works in Simple Terms](#how-it-works-in-simple-terms)
-- [Free Tier: Standard (Non-PAYG) vs. Pay-As-You-Go (PAYG)](#free-tier-standard-non-payg-vs-pay-as-you-go-payg)
-- [Prerequisites](#prerequisites)
-- [Step-by-Step Deployment Guide](#step-by-step-deployment-guide)
-  - [Step 1: Clone the Repository & Enter Directory](#step-1-clone-the-repository--enter-directory)
-  - [Step 2: Configure Your Settings](#step-2-configure-your-settings)
-  - [Step 3: Deploy to Oracle Cloud](#step-3-deploy-to-oracle-cloud)
-  - [Step 4: Map Your Domain (DNS)](#step-4-map-your-domain-dns)
-  - [Step 5: Connect Your Home Server via WireGuard](#step-5-connect-your-home-server-via-wireguard)
-- [Managing & Customizing Game Ports](#managing--customizing-game-ports)
-- [Teardown / Deletion Steps](#teardown--deletion-steps)
-- [Important Security Best Practice](#important-security-best-practice)
-- [Disclaimers & Limitations of Liability](#disclaimers--limitations-of-liability)
+- [How It Works](#how-it-works)
+- [Free Tier & Cost Protection](#free-tier--cost-protection)
+- [Prerequisites (by OS)](#prerequisites-by-os)
+  - [Windows](#windows)
+  - [macOS](#macos)
+  - [Linux](#linux)
+- [Step-by-Step Deployment](#step-by-step-deployment)
+  - [Step 1: Set Up Oracle API Credentials](#step-1-set-up-oracle-api-credentials)
+  - [Step 2: Clone & Configure](#step-2-clone--configure)
+  - [Step 3: Deploy with Terraform](#step-3-deploy-with-terraform)
+  - [Step 4: Point Your Domain (DNS)](#step-4-point-your-domain-dns)
+  - [Step 5: Connect Your Home Server](#step-5-connect-your-home-server)
+- [Customizing Game Ports](#customizing-game-ports)
+- [Teardown / Cleanup](#teardown--cleanup)
+- [Security Best Practices](#security-best-practices)
+- [Disclaimers](#disclaimers)
 
 ---
 
-## How It Works in Simple Terms
+## How It Works
 
-If your home ISP uses CGNAT (Carrier-Grade NAT) or blocks inbound ports, players on the internet cannot connect directly to your home computer. 
+If your home internet uses Carrier-Grade NAT (CGNAT), players cannot connect directly to your home IP address. 
 
-This repository provisions a cloud server designed to run within Oracle Cloud's Always Free tier with a static public IP address. It sets up an encrypted WireGuard tunnel between the Oracle VPS and your home server. When players connect to your cloud IP or domain name, traffic is instantly forwarded through the encrypted tunnel directly to your game server at home.
+This project sets up a lightweight cloud VPS with a static public IP and connects it to your home server over a fast, encrypted WireGuard tunnel. When players connect to your cloud IP or domain, traffic is forwarded instantly to your home machine.
 
 ```mermaid
-flowchart TD
-    subgraph Internet ["Public Internet"]
-        Players["Players / Friends"]
-    end
-
-    subgraph OCI ["Oracle Cloud (Always Free Tier)"]
-        subgraph VPS ["Free Cloud VPS (Ubuntu 24.04 ARM - 1 OCPU / 1 GB RAM)"]
-            PublicIP["Reserved Public IP<br/>(play.yourdomain.com)"]
-            IPTables["Port Forwarding<br/>(iptables NAT)"]
-            WGServer["WireGuard Server<br/>(10.66.66.1)"]
-        end
-        Budget["Zero-Spend Budget Alert<br/>(Alerts if cost > $0.00)"]
-    end
-
-    subgraph Home ["Your Home Network (Behind CGNAT)"]
-        WGPilot["WireGuard Client (10.66.66.2)<br/>(Maintains outbound tunnel)"]
-        GameServers["Your Game Servers<br/>- Minecraft (:25565)<br/>- Palworld (:8211)"]
-    end
-
-    Players -->|"Connects to domain"| PublicIP
-    PublicIP --> IPTables
-    IPTables -->|"Forwards traffic"| WGServer
-    WGServer <-->|"Encrypted WireGuard Tunnel"| WGPilot
-    WGPilot --> GameServers
+flowchart LR
+    Players[Players & Friends] -->|play.yourdomain.com| VPS[Oracle Free VPS<br/>Static IP + NAT Forwarding]
+    VPS <== Encrypted WireGuard Tunnel ==> Home[Home Game Server<br/>Behind CGNAT]
 ```
 
 ---
 
-## Free Tier: Standard (Non-PAYG) vs. Pay-As-You-Go (PAYG)
+## Free Tier & Cost Protection
 
-By default, this stack deploys a lean **1 OCPU / 1 GB RAM / 50 GB boot volume** instance (configured in [tf/locals.tf](tf/locals.tf)). Under Oracle Cloud's reclamation policy, **memory utilization is only evaluated for Ampere A1 (ARM) instances** (legacy AMD/x86 shapes only check CPU and network). Because our stack runs on ARM, keeping memory at 1 GB ensures baseline OS and service usage naturally stays above Oracle's 20% threshold (~25–35%) even while idle, preventing automated instance reclamation.
+This stack runs entirely within Oracle Cloud's **Always Free** tier:
+- **Instance Specs**: 1 OCPU (ARM Ampere A1), 1 GB RAM, 50 GB Boot Volume.
+- **Reclamation Protection**: Oracle only checks memory on ARM instances for idle reclamation. Running on 1 GB RAM ensures normal OS usage naturally stays above Oracle's 20% threshold (~25–35%), protecting your server from automatic deletion.
+- **Spend Safeguard**: Includes an automated budget alert ([tf/budget.tf](tf/budget.tf)) that emails you if your account ever accrues even `$0.01` in charges.
 
-| Feature | Standard Free Tier (Non-PAYG) | Pay-As-You-Go (PAYG) |
+| Feature | Standard Free Tier | Pay-As-You-Go (PAYG) Account |
 | :--- | :--- | :--- |
-| **Default Spec** | 1 OCPU, 1 GB RAM (keeps idle usage >20%) | 1 OCPU, 1 GB RAM, 50 GB boot volume |
-| **Idle Reclamation** | 🛡️ **Protected**: Memory is checked on ARM A1 shapes; 1 GB RAM keeps baseline idle usage safely above Oracle's 20% threshold (~25–35%). | ✅ **Exempt**: Oracle never reclaims idle instances on PAYG accounts. |
-| **A1 ARM Availability** | Low priority; frequent `Out of host capacity` errors. | High priority; easy to launch ARM instances. |
-| **Spend Safety** | Hard limits; cannot incur accidental charges. | Protected by our built-in `$0.01` budget alert ([tf/budget.tf](tf/budget.tf)). |
+| **Monthly Cost** | $0.00 | $0.00 (within free limits) |
+| **Idle Reclamation** | 🛡️ Protected by 1 GB RAM threshold | ✅ Exempt from idle reclamation |
+| **Host Capacity** | Lower priority during peak times | Highest priority (avoids "out of capacity" errors) |
 
 > [!TIP]
-> **Why Upgrade to PAYG?**
-> Upgrading your account to Pay-As-You-Go (PAYG) requires a **temporary credit card authorization hold** (typically around ~$100 USD or local currency equivalent) to verify your account. This is **not a charge** and is **fully reversed/refunded** by Oracle shortly after verification. You will **not** be billed for running this VPS as long as you stay within the Always Free limits (enforced by this stack's guardrails). Upgrading gives you higher provisioning priority (bypassing `Out of host capacity` errors) and permanently turns off idle instance reclamation.
+> **Optional PAYG Upgrade**: Upgrading to a Pay-As-You-Go account bypasses ARM capacity shortages. Oracle places a temporary ~$100 authorization hold on your card for identity verification, which is **fully refunded/reversed**. You are never charged as long as you stay within the Always Free limits.
 
 ---
 
-## Prerequisites
+## Prerequisites (by OS)
 
-Before deploying, ensure you have the following ready:
+Before you begin, make sure you have:
+1. An **[Oracle Cloud Account](https://www.oracle.com/cloud/free/)** (Always Free).
+2. The tools listed below for your operating system.
 
-1. **Oracle Cloud Account**: [Sign up for an OCI Account](https://www.oracle.com/cloud/free/).
-2. **Git**: Installed on your computer ([Download Git](https://git-scm.com/downloads)).
-3. **Terraform CLI** (v1.5.0+): Installed on your computer ([HashiCorp Install Guide](https://developer.hashicorp.com/terraform/install)).
-   - *Windows (winget)*: `winget install HashiCorp.Terraform`
-   - *macOS (Homebrew)*: `brew install terraform`
-   - *Linux (Ubuntu/Debian)*: `sudo apt install terraform`
-4. **OCI API Signing Key & CLI Config**:
-   - Follow [Oracle Docs: Generating an API Signing Key](https://docs.oracle.com/en-us/iaas/Content/API/Concepts/apisigningkey.htm).
-   - In the Oracle Console, click your profile icon (top right) > **My profile** (or **User Settings**) > **API Keys** > **Add API Key**.
-   - Download the private key and copy the configuration snippet into `~/.oci/config` (or `C:\Users\<YourUsername>\.oci\config` on Windows). Detailed guide: [OCI SDK & Config Setup](https://docs.oracle.com/en-us/iaas/Content/API/Concepts/sdkconfig.htm).
-5. **SSH Key Pair**:
-   - Needed to log into your VPS without passwords. Follow [Oracle Docs: Generating SSH Keys](https://docs.oracle.com/en-us/iaas/Content/GSG/Tasks/creatingkeys.htm) or [GitHub SSH Key Guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent).
-   - *Quick command*: Run `ssh-keygen -t ed25519` in your terminal and press Enter to accept default location (`~/.ssh/id_ed25519.pub`).
-6. **Home Linux Server**:
-   - The computer hosting your game server with WireGuard installed ([WireGuard Installation](https://www.wireguard.com/install/)):
+### Windows
+
+1. **Install Git & Terraform**:
+   Open PowerShell as Administrator:
+   ```powershell
+   winget install Git.Git HashiCorp.Terraform
+   ```
+2. **Generate an SSH Key** (press Enter to accept default path):
+   ```powershell
+   ssh-keygen -t ed25519
+   ```
+   *Your public key will be saved to: `C:\Users\<YourUsername>\.ssh\id_ed25519.pub`*
+
+---
+
+### macOS
+
+1. **Install Git & Terraform**:
+   Open Terminal:
+   ```bash
+   brew install git terraform
+   ```
+2. **Generate an SSH Key** (press Enter to accept default path):
+   ```bash
+   ssh-keygen -t ed25519
+   ```
+   *Your public key will be saved to: `~/.ssh/id_ed25519.pub`*
+
+---
+
+### Linux
+
+1. **Install Git & Terraform** (Ubuntu/Debian example):
+   ```bash
+   sudo apt update && sudo apt install -y git snapd
+   sudo snap install terraform --classic
+   ```
+   *(For other distributions, refer to the [HashiCorp Install Guide](https://developer.hashicorp.com/terraform/install)).*
+2. **Generate an SSH Key** (press Enter to accept default path):
+   ```bash
+   ssh-keygen -t ed25519
+   ```
+   *Your public key will be saved to: `~/.ssh/id_ed25519.pub`*
+
+---
+
+## Step-by-Step Deployment
+
+### Step 1: Set Up Oracle API Credentials
+
+Terraform needs an API key to communicate with your Oracle Cloud account.
+
+1. Sign in to the [Oracle Cloud Console](https://cloud.oracle.com/).
+2. Click your profile avatar (top-right) → **My profile** (or **User Settings**).
+3. Under **Resources** (bottom-left), click **API Keys** → **Add API Key**.
+4. Select **Generate API Key Pair**, click **Download Private Key** (save as `oci_api_key.pem`), and click **Add**.
+5. Copy the configuration text block displayed on screen.
+6. Create or open your config file in a text editor:
+   - **Windows**: `C:\Users\<YourUsername>\.oci\config`
+   - **macOS / Linux**: `~/.oci/config`
+7. Paste the snippet into the file and verify that `key_file` points to your downloaded `oci_api_key.pem` file.
+
+---
+
+### Step 2: Clone & Configure
+
+1. Open your terminal and clone this repository:
+   ```bash
+   git clone https://github.com/FranzTamani/free-vps-wireguard-relay.git
+   cd free-vps-wireguard-relay/tf
+   ```
+
+2. Create your settings file from the example:
+   - **Windows (PowerShell)**:
+     ```powershell
+     Copy-Item terraform.tfvars.example terraform.tfvars
+     ```
+   - **macOS / Linux**:
      ```bash
-     sudo apt update && sudo apt install -y wireguard-tools
+     cp terraform.tfvars.example terraform.tfvars
      ```
 
+3. Open `terraform.tfvars` in a text editor:
+   ```hcl
+   # Set your email for zero-spend safety notifications:
+   budget_alert_email = "your-email@example.com"
+
+   # Leave this blank for now (you will fill it in Step 5):
+   home_peer_public_key = ""
+   ```
+
 ---
 
-## Step-by-Step Deployment Guide
+### Step 3: Deploy with Terraform
 
-> **Note on Environments**:
-> - **Steps 1 to 3**: Run on your local computer (where you run Terraform).
-> - **Step 4**: Done in your web browser (your domain name registrar).
-> - **Step 5**: Run on your home server (where your game server runs).
-
-### Step 1: Clone the Repository & Enter Directory
-Open your terminal (PowerShell, Command Prompt, or Linux/macOS terminal):
-
-```bash
-git clone https://github.com/FranzTamani/free-vps-wireguard-relay.git
-cd free-vps-wireguard-relay/tf
-```
-
-### Step 2: Configure Your Settings
-Copy the example variable template:
-
-```bash
-cp terraform.tfvars.example terraform.tfvars
-```
-
-Open `terraform.tfvars` in any text editor (Notepad, VS Code, nano):
-```hcl
-# Your email for zero-spend alerts (notifies you if spend ever reaches $0.01)
-budget_alert_email = "your-email@example.com"
-
-# Leave empty for now; you will fill this in Step 5
-home_peer_public_key = ""
-```
-*(Note: `terraform.tfvars` is in `.gitignore`, so your email and keys will never be accidentally committed to Git).*
-
-### Step 3: Deploy to Oracle Cloud
-Initialize the provider and run the deployment:
+Run the following commands from the `tf/` folder:
 
 ```bash
 terraform init
 terraform apply
 ```
 
-Type `yes` when prompted to confirm. 
-
-In about **1–2 minutes**, deployment will finish, and Terraform will print a complete summary box containing your server's **Reserved Public IP** and connection commands.
+Type `yes` when prompted. In 1–2 minutes, Terraform will complete the deployment and print a summary box with your **Reserved Public IP** and connection commands.
 
 ---
 
-### Step 4: Map Your Domain (DNS)
-Log in to where you manage your domain (Cloudflare, Namecheap, Porkbun, etc.) and create a new record:
-- **Type**: `A`
-- **Name**: `play` (or `@` for root domain)
-- **Target / Value**: `<your_reserved_public_ip>`
-- **Proxy Status**: **DNS Only (Grey Cloud)** *(Important: Cloudflare CDN cannot proxy UDP/game packets).*
+### Step 4: Point Your Domain (DNS)
+
+In your domain registrar or DNS provider (Cloudflare, Namecheap, Porkbun, etc.), add an `A` record:
+
+| Setting | Value |
+| :--- | :--- |
+| **Type** | `A` |
+| **Name / Host** | `play` *(or `@` for root domain)* |
+| **Target / IP** | `<your_reserved_public_ip>` |
+| **Proxy Status** | **DNS Only (Grey Cloud)** *(Do NOT use Cloudflare HTTP proxy; it cannot route game packets)* |
 
 ---
 
-### Step 5: Connect Your Home Server via WireGuard
+### Step 5: Connect Your Home Server
 
-Now switch to your **home game server**:
+Choose the guide matching the operating system running your **home game server**:
 
-1. **Generate your home server keypair**:
+#### Option A: Home Server on Linux (Ubuntu / Debian)
+
+1. **Install WireGuard**:
+   ```bash
+   sudo apt update && sudo apt install -y wireguard
+   ```
+
+2. **Generate your home keys**:
    ```bash
    wg genkey | tee home.key | wg pubkey > home.pub
    ```
 
-2. **Add your home public key to Terraform**:
-   - Copy the string printed inside `home.pub`.
-   - On your computer running Terraform, open `tf/terraform.tfvars` and paste it into `home_peer_public_key`:
+3. **Update Terraform with your home key**:
+   - Copy the string inside `home.pub`.
+   - On the computer where you ran Terraform, open `tf/terraform.tfvars` and set:
      ```hcl
      home_peer_public_key = "PASTE_CONTENTS_OF_home.pub_HERE"
      ```
-   - Run `terraform apply` on your computer. It applies live to the running VPS without rebooting!
+   - Run `terraform apply` (applies live to the VPS in seconds without restarting).
 
-3. **Fetch the VPS WireGuard public key**:
-   Run the command provided in your Terraform summary output:
-   ```bash
-   terraform output wireguard_server_public_key_command
-   # Example: ssh ubuntu@<public_ip> sudo cat /etc/wireguard/server.pub
-   ```
+4. **Retrieve VPS key and generate client config**:
+   - Get the VPS public key:
+     ```bash
+     terraform output wireguard_server_public_key_command
+     ```
+   - View your ready-made config template:
+     ```bash
+     terraform output -raw home_wireguard_config
+     ```
+   - Save this file to `/etc/wireguard/wg0.conf` on your home server, replacing the placeholder keys with `home.key` and the VPS public key.
 
-4. **Set up the client configuration on your home server**:
-   Print the ready-to-use client config from Terraform:
-   ```bash
-   terraform output -raw home_wireguard_config
-   ```
-   Save this to `/etc/wireguard/wg0.conf` on your home server. Replace `<contents of home.key>` with your `home.key` file content, replace `<server public key>` with the VPS public key, and activate the tunnel:
+5. **Start WireGuard**:
    ```bash
    sudo systemctl enable --now wg-quick@wg0
    ```
 
-5. **Verify the tunnel**:
+6. **Verify the connection**:
    ```bash
    ping 10.66.66.1
    ```
-   If you get ping replies, congratulations! Your tunnel is active.
-
-Players can now connect to your home game servers using your domain (for example, `play.yourdomain.com:25565` for Minecraft or `:8211` for Palworld)!
 
 ---
 
-## Managing & Customizing Game Ports
+#### Option B: Home Server on Windows
 
-All ports forwarded by the VPS are declared in [tf/locals.tf](tf/locals.tf). You can enable, disable, or add custom games anytime:
+1. **Install WireGuard**:
+   Download the installer from [wireguard.com/install](https://www.wireguard.com/install/) or run:
+   ```powershell
+   winget install WireGuard.WireGuard
+   ```
+
+2. **Generate your home keys**:
+   - Open the **WireGuard** app.
+   - Click the arrow next to **Add Tunnel** → **Add empty tunnel...**.
+   - WireGuard automatically generates a **Public key** and **Private key**. Copy the **Public key**.
+
+3. **Update Terraform with your home key**:
+   - On your deployment machine, edit `tf/terraform.tfvars`:
+     ```hcl
+     home_peer_public_key = "PASTE_WINDOWS_PUBLIC_KEY_HERE"
+     ```
+   - Run `terraform apply`.
+
+4. **Configure the Tunnel**:
+   - Fetch the VPS public key by running the command shown in:
+     ```powershell
+     terraform output wireguard_server_public_key_command
+     ```
+   - In the WireGuard Windows tunnel editor, enter:
+     ```ini
+     [Interface]
+     PrivateKey = <auto-generated private key>
+     Address = 10.66.66.2/24
+
+     [Peer]
+     PublicKey = <vps_wireguard_public_key>
+     Endpoint = <your_vps_public_ip>:51820
+     AllowedIPs = 10.66.66.1/32
+     PersistentKeepalive = 25
+     ```
+   - Click **Save**, then click **Activate**.
+
+5. **Verify the connection**:
+   ```powershell
+   ping 10.66.66.1
+   ```
+
+---
+
+#### Option C: Home Server on macOS
+
+1. **Install WireGuard**:
+   Download from the [Mac App Store](https://apps.apple.com/us/app/wireguard/id1451685025) or via Homebrew:
+   ```bash
+   brew install wireguard-tools
+   ```
+
+2. **Generate your home keys**:
+   - Open WireGuard → click **Add Tunnel** → **Add empty tunnel...**.
+   - Copy the generated **Public key**.
+
+3. **Update Terraform with your home key**:
+   - Add the public key to `tf/terraform.tfvars`:
+     ```hcl
+     home_peer_public_key = "PASTE_MAC_PUBLIC_KEY_HERE"
+     ```
+   - Run `terraform apply`.
+
+4. **Configure the Tunnel**:
+   - Get the VPS public key:
+     ```bash
+     terraform output wireguard_server_public_key_command
+     ```
+   - Paste the configuration (using the same format as Windows above) and click **Save** → **Activate**.
+
+5. **Verify the connection**:
+   ```bash
+   ping 10.66.66.1
+   ```
+
+---
+
+🎉 **Setup Complete!** Players can now join your game servers using your domain (e.g., `play.yourdomain.com:25565` for Minecraft or `:8211` for Palworld).
+
+---
+
+## Customizing Game Ports
+
+Ports forwarded by the VPS are managed in [tf/locals.tf](tf/locals.tf). You can enable, disable, or add custom games at any time:
 
 ```hcl
 game_ports = {
-  palworld_game  = { enabled = true,  protocol = "udp", port = 8211,  description = "Palworld game" }
-  palworld_query = { enabled = true,  protocol = "udp", port = 27015, description = "Palworld Steam query" }
-  minecraft_java = { enabled = true,  protocol = "tcp", port = 25565, description = "Minecraft Java" }
+  palworld_game     = { enabled = true,  protocol = "udp", port = 8211,  description = "Palworld game" }
+  palworld_query    = { enabled = true,  protocol = "udp", port = 27015, description = "Palworld Steam query" }
+  minecraft_java    = { enabled = true,  protocol = "tcp", port = 25565, description = "Minecraft Java" }
+  minecraft_bedrock = { enabled = false, protocol = "udp", port = 19132, description = "Minecraft Bedrock" }
 }
 ```
 
-Whenever you modify ports in `locals.tf`, simply run `terraform apply`. The VPS automatically syncs and applies your firewall rules within 5 minutes without restarting the machine.
+After modifying ports, simply run:
+```bash
+terraform apply
+```
+Changes sync to the VPS automatically within 5 minutes without restarting the machine.
 
 ---
 
-## Teardown / Deletion Steps
+## Teardown / Cleanup
 
-If you ever wish to completely remove all resources (VPS, Reserved IP, VCN, budget alert):
+To delete all cloud resources (VPS, IP address, virtual network, and budget alert):
 
 ```bash
 cd tf
 terraform destroy
 ```
-
-Type `yes` when prompted. Everything created in your Oracle Cloud tenancy by this project will be deleted cleanly.
+Type `yes` when prompted. Everything in your Oracle tenancy created by this project will be removed cleanly.
 
 ---
 
-## Important Security Best Practice
+## Security Best Practices
 
 > [!WARNING]
-> **DELETE YOUR OCI API KEY ONCE DONE, RE-CREATE IF YOU WANT TO TEAR DOWN THE STACK**
->
-> Once your VPS is deployed and running, you can safely delete the API signing key from the Oracle Console (**Profile / Identity > Users > Your User > API Keys**).
->
-> The running VPS does **not** need your OCI API key to operate. Deleting the key from Oracle Console ensures that even if your personal computer is ever compromised, no credentials exist on disk that could manage your Oracle Cloud account.
->
-> When you eventually want to update configuration or delete the stack with `terraform destroy`, simply generate a new API key in the console and re-add it to your `~/.oci/config`.
+> **Delete your OCI API key after deployment**
+> 
+> Once your VPS is deployed and running, you can safely delete the API signing key from the Oracle Console (**Profile → User Settings → API Keys**).
+> 
+> The running VPS operates independently and **never** needs your API key. Removing the key ensures that your Oracle account cannot be modified even if your local computer is compromised.
+> 
+> When you need to run updates or execute `terraform destroy`, simply generate a new key in the console and re-add it to your `.oci/config`.
 
 ---
 
-## Disclaimers & Limitations of Liability
+## Disclaimers
 
 > [!NOTE]
-> **Project Disclaimer**: This project was developed with the assistance of AI. The architecture, security hardening, firewall controls, and Terraform configurations were designed and vetted against cloud security best practices and Oracle Cloud Always Free guidelines.
->
-> **Cost & Usage Disclaimer**: This software is provided under the MIT License "as is", without warranty of any kind. While this stack is engineered to operate strictly within Oracle Cloud Infrastructure's Always Free tier limits and includes budget safeguards, you are solely responsible for monitoring your own cloud tenancy and usage. The author/s assume no liability for any charges, service modifications, or account actions by Oracle.
+> **Project Disclaimer**: Developed with AI assistance. Configurations adhere to cloud security best practices and Oracle Cloud Always Free guidelines.
+> 
+> **Cost & Usage Disclaimer**: Provided under the MIT License "as is", without warranty. While designed to operate entirely within Always Free tier limits, you are solely responsible for monitoring your cloud tenancy. The author assumes no liability for charges, service changes, or account actions by Oracle.
