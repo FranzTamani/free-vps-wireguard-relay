@@ -41,9 +41,3 @@ variable "home_peer_public_key" {
   default     = ""
 }
 
-variable "anti_idle_enabled" {
-  description = "Enable anti-idle keepalive background task to keep CPU and memory >20% to prevent instance reclamation on free tier (non-PAYG)."
-  type        = bool
-  default     = true
-}
-

@@ -47,12 +47,12 @@ locals {
   }
 
   # ---------------------------------------------------------------------------
-  # Instance (1 OCPU, 6 GB RAM, 50 GB boot volume)
+  # Instance (1 OCPU, 1 GB RAM, 50 GB boot volume)
   # ---------------------------------------------------------------------------
   instance = {
     shape                   = "VM.Standard.A1.Flex" # ARM Ampere (1 Gbps per OCPU)
     ocpus                   = 1                     # 1 OCPU (1 Gbps bandwidth)
-    memory_in_gbs           = 6                     # 6 GB RAM
+    memory_in_gbs           = 1                     # 1 GB RAM (keeps idle memory >20% to avoid reclamation)
     boot_volume_size_in_gbs = 50                    # 50 GB boot volume
     ubuntu_version          = "24.04"               # Minimal image (aarch64)
     hostname                = "free-vps"
@@ -150,19 +150,5 @@ locals {
     alert_email     = trimspace(var.budget_alert_email)
     monthly_amount  = 1    # in your account currency
     alert_threshold = 0.01 # absolute amount of ACTUAL spend that triggers the email
-  }
-
-  # ---------------------------------------------------------------------------
-  # Anti-idle keepalive (prevent Oracle Always Free instance reclamation)
-  # Free Tier (non-PAYG) instances are reclaimed by Oracle if CPU and Memory
-  # utilization stay below 20% (95th percentile over 7 days).
-  # This background service maintains steady ~25% CPU and memory at lowest priority (nice 19).
-  # Pay-As-You-Go (PAYG) accounts are immune to reclamation; PAYG users can set
-  # this to false.
-  # ---------------------------------------------------------------------------
-  anti_idle = {
-    enabled           = var.anti_idle_enabled
-    cpu_target_pct    = 25 # Target CPU utilization (percent across all cores)
-    memory_target_pct = 25 # Target memory utilization (percent of total RAM)
   }
 }

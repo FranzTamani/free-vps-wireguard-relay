@@ -77,7 +77,6 @@ locals {
     forwards       = [for k, v in local.enabled_game_ports : { name = k, protocol = v.protocol, port = v.port }]
     os_updates     = local.os_updates
     self_update    = local.self_update
-    anti_idle      = local.anti_idle
   }
 
   # Bootstrap copy of the on-box management scripts (CRLF-normalised for Windows checkouts).

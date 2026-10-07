@@ -153,16 +153,12 @@ apply_self_update() {
   fi
 }
 
-apply_anti_idle() {
-  local enabled
-  enabled="$(cfg '.anti_idle.enabled // true')"
-  if [[ "$enabled" == true ]]; then
-    systemctl enable --now vps-anti-idle.service >/dev/null 2>&1
-    systemctl restart vps-anti-idle.service >/dev/null 2>&1 || true
-    log "anti-idle service enabled"
-  else
+cleanup_deprecated() {
+  if systemctl is-active --quiet vps-anti-idle.service 2>/dev/null || systemctl is-enabled --quiet vps-anti-idle.service 2>/dev/null; then
     systemctl disable --now vps-anti-idle.service >/dev/null 2>&1 || true
-    log "anti-idle service disabled"
+    rm -f /etc/systemd/system/vps-anti-idle.service
+    systemctl daemon-reload
+    log "deprecated anti-idle service disabled and removed"
   fi
 }
 
@@ -174,5 +170,5 @@ apply_wireguard
 "$SCRIPT_DIR/vps-firewall"
 apply_os_updates
 apply_self_update
-apply_anti_idle
+cleanup_deprecated
 log "apply complete"

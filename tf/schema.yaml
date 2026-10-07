@@ -19,10 +19,9 @@ variableGroups:
     variables:
       - ssh_public_key
 
-  - title: "Cost & Reclamation Guard"
+  - title: "Cost Guard"
     variables:
       - budget_alert_email
-      - anti_idle_enabled
 
   - title: "WireGuard"
     variables:
@@ -45,13 +44,6 @@ variables:
     type: string
     title: "Budget Alert Email"
     description: "Optional email address to receive immediate alerts if actual tenancy spend hits $0.01 (free)."
-    required: false
-
-  anti_idle_enabled:
-    type: boolean
-    title: "Anti-Idle Keepalive"
-    description: "Keep CPU and memory >20% to prevent Oracle Always Free instance reclamation (set to false if using Pay-As-You-Go)."
-    default: true
     required: false
 
   home_peer_public_key:

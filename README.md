@@ -6,6 +6,24 @@ Compatible with both the **Local Terraform CLI** (zero-configuration auto-discov
 
 ---
 
+## Table of Contents
+
+- [How It Works in Simple Terms](#how-it-works-in-simple-terms)
+- [Free Tier: Standard (Non-PAYG) vs. Pay-As-You-Go (PAYG)](#free-tier-standard-non-payg-vs-pay-as-you-go-payg)
+- [Prerequisites](#prerequisites)
+- [Step-by-Step Deployment Guide](#step-by-step-deployment-guide)
+  - [Step 1: Clone the Repository & Enter Directory](#step-1-clone-the-repository--enter-directory)
+  - [Step 2: Configure Your Settings](#step-2-configure-your-settings)
+  - [Step 3: Deploy to Oracle Cloud](#step-3-deploy-to-oracle-cloud)
+  - [Step 4: Map Your Domain (DNS)](#step-4-map-your-domain-dns)
+  - [Step 5: Connect Your Home Server via WireGuard](#step-5-connect-your-home-server-via-wireguard)
+- [Managing & Customizing Game Ports](#managing--customizing-game-ports)
+- [Teardown / Deletion Steps](#teardown--deletion-steps)
+- [Important Security Best Practice](#important-security-best-practice)
+- [Disclaimers & Limitations of Liability](#disclaimers--limitations-of-liability)
+
+---
+
 ## How It Works in Simple Terms
 
 If your home ISP uses CGNAT (Carrier-Grade NAT) or blocks inbound ports, players on the internet cannot connect directly to your home computer. 
@@ -19,11 +37,10 @@ flowchart TD
     end
 
     subgraph OCI ["Oracle Cloud (Always Free Tier)"]
-        subgraph VPS ["Free Cloud VPS (Ubuntu 24.04 ARM)"]
+        subgraph VPS ["Free Cloud VPS (Ubuntu 24.04 ARM - 1 OCPU / 1 GB RAM)"]
             PublicIP["Reserved Public IP<br/>(play.yourdomain.com)"]
             IPTables["Port Forwarding<br/>(iptables NAT)"]
             WGServer["WireGuard Server<br/>(10.66.66.1)"]
-            AntiIdle["Anti-Idle Keepalive<br/>(Prevents free instance deletion)"]
         end
         Budget["Zero-Spend Budget Alert<br/>(Alerts if cost > $0.00)"]
     end
@@ -44,15 +61,12 @@ flowchart TD
 
 ## Free Tier: Standard (Non-PAYG) vs. Pay-As-You-Go (PAYG)
 
-Both account types receive the exact same **$0 Always Free allowances**:
-- **Compute**: Up to 2 OCPUs & 12 GB RAM (Ampere ARM A1).
-- **Storage**: 200 GB total Block Volume (boot + storage).
-- **Network**: 10 TB/month outbound data transfer & 1 free Reserved Public IPv4.
+By default, this stack deploys a lean **1 OCPU / 1 GB RAM / 50 GB boot volume** instance (configured in [tf/locals.tf](tf/locals.tf)). We intentionally keep the spec low so baseline system and memory utilization naturally stays above 20% even while idle, preventing Oracle Always Free instance reclamation without needing artificial load generators.
 
 | Feature | Standard Free Tier (Non-PAYG) | Pay-As-You-Go (PAYG) |
 | :--- | :--- | :--- |
-| **Idle Reclamation** | ⚠️ **Active**: Oracle terminates instances if CPU and RAM stay below 20% for 7 days. | ✅ **Exempt**: Oracle never reclaims idle instances on paid/PAYG accounts. |
-| **Anti-Idle Keepalive** | **Required**: Stack runs a low-priority task (`nice 19`) keeping load ~25%. | **Optional**: Set `anti_idle_enabled = false` in `terraform.tfvars`. |
+| **Default Spec** | 1 OCPU, 1 GB RAM (keeps idle usage >20%) | 1 OCPU, 1 GB RAM, 50 GB boot volume |
+| **Idle Reclamation** | 🛡️ **Protected**: Baseline system usage on 1 GB RAM stays above Oracle's 20% threshold (~25–35%). | ✅ **Exempt**: Oracle never reclaims idle instances on PAYG accounts. |
 | **A1 ARM Availability** | Low priority; frequent `Out of host capacity` errors. | High priority; easy to launch ARM instances. |
 | **Spend Safety** | Hard limits; cannot incur accidental charges. | Protected by our built-in `$0.01` budget alert ([tf/budget.tf](tf/budget.tf)). |
 
@@ -113,9 +127,6 @@ Open `terraform.tfvars` in any text editor (Notepad, VS Code, nano):
 ```hcl
 # Your email for zero-spend alerts (notifies you if spend ever reaches $0.01)
 budget_alert_email = "your-email@example.com"
-
-# Set to false if you upgraded your Oracle account to Pay-As-You-Go (PAYG)
-anti_idle_enabled = true
 
 # Leave empty for now; you will fill this in Step 5
 home_peer_public_key = ""
@@ -218,7 +229,7 @@ Type `yes` when prompted. Everything created in your Oracle Cloud tenancy by thi
 
 ---
 
-## ⚠️ Important Security Best Practice
+## Important Security Best Practice
 
 > [!WARNING]
 > **DELETE YOUR OCI API KEY ONCE DONE, RE-CREATE IF YOU WANT TO TEAR DOWN THE STACK**
@@ -234,6 +245,6 @@ Type `yes` when prompted. Everything created in your Oracle Cloud tenancy by thi
 ## Disclaimers & Limitations of Liability
 
 > [!NOTE]
-> **Project Disclaimer**: This project was developed with the assistance of AI. However, I have a professional background working in cloud infrastructure and cybersecurity. The architecture, security hardening, firewall controls, and Terraform configurations were designed and vetted against cloud security best practices and Oracle Cloud Always Free guidelines.
+> **Project Disclaimer**: This project was developed with the assistance of AI. The architecture, security hardening, firewall controls, and Terraform configurations were designed and vetted against cloud security best practices and Oracle Cloud Always Free guidelines.
 >
 > **Cost & Usage Disclaimer**: This software is provided under the MIT License "as is", without warranty of any kind. While this stack is engineered to operate strictly within Oracle Cloud Infrastructure's Always Free tier limits and includes budget safeguards, you are solely responsible for monitoring your own cloud tenancy and usage. The author/s assume no liability for any charges, service modifications, or account actions by Oracle.
